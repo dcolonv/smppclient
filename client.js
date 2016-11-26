@@ -1,23 +1,47 @@
 /**
  * Created by @dcolonv on 04/05/2015.
  */
-var Smpp = require('./smpp');
+var SmppClient = require('./smpp_client');
 var commands = require('./commands');
 var ShortMessage = require('./short_message');
+var DataMessage = require('./data_message');
 var SMEAddress = require('./sme_address');
 var DistributionList = require('./distribution_List');
 
 var fs = require('fs');
 
-var con1 = new Smpp();
+var con1 = new SmppClient();
 con1.system_id = 'alt';
 con1.password = 'alt';
 con1.system_type = 'smpp1';
-con1.keep_alive = 5000;
+con1.keep_alive = 20000;
 con1.throughput = 0;
+con1.timeout = 5000;
+
+
+con1.listen(7778).then(function(){
+    console.log('Client: client start listening on port ' + 7778);
+    client.on(commands.outbind, function(outbind){
+        console.log('Client: outbind received!, system_id: %s, password: %s', outbind.system_id, outbind.password);
+        if(outbind.system_id === 'alt') {
+            client.bind_receiver().then(function () {
+                console.log(client.status);
+            }).catch(function (err) {
+                console.log(err.message);
+            });
+        }
+        else{
+            console.log('User not authenticated!');
+            client.disconnect();
+        }
+    });
+}).catch(function(err){
+    console.log(err.message);
+});
+
 
 var logArray = [];
-con1.bind_receiver('localhost', 7777).then(function(){
+/*con1.bind_receiver('localhost', 7777).then(function(){
     con1.on(commands.enquire_link_resp, function(enquire_link_resp){
         //console.log('Enquire Link Response recibido, status: %s, sequence: %d', message.status, message.sequence_number);
     });
@@ -41,6 +65,17 @@ con1.bind_receiver('localhost', 7777).then(function(){
         var logMessage = "Message: " + deliver_sm.short_message + ", telefonos: " + deliver_sm.destination_addr + ", shortCode: " + deliver_sm.source_addr +
             ", status: " + deliver_sm.status + ", messagePayload: " + deliver_sm.message_payload+ "" + "\n";
         console.log(logMessage);
+    });
+
+    con1.on(commands.data_sm_resp, function(dataMessage){
+        var logMessage = "Message: " + dataMessage.short_message + ", telefono: " + dataMessage.destination_addr + ", shortCode: " + dataMessage.source_addr +
+            ", status: " + dataMessage.status + ", messageId: " + dataMessage.message_id + "\n";
+        console.log(logMessage);
+    });
+
+    con1.on(commands.data_sm, function(data_sm){
+        console.log("Data SM Received")
+        console.log(data_sm);
     });
 
 }).catch(function(error){
@@ -70,15 +105,24 @@ setTimeout(function(){
             sm1.registered_delivery = 0;
             sm1.source_addr = '3030';
             sm1.short_message = 'Esto es un mensaje prueba: ' + i;
-            con1.submit_sm(sm1);
+            sm1.optionals.dest_subaddress = '+8888888';
+           // con1.submit_sm(sm1);
+
+            var dm1 = new DataMessage();
+            dm1.destination_addr = '+50688439135';
+            dm1.source_addr = '4040';
+
+            con1.data_sm(dm1);
         }
     }
 }, 3000);
-
+*/
 //Unbind test after 20 seconds
 /*setTimeout(function(){
     if(con1.isBound)
-        con1.unbind(function(messagesToSubmit, pendingResponseSMList){
+        con1.unbind(function(err, messagesToSubmit, pendingResponseSMList){
+            if(err)
+                return console.log(err.message);
             console.log('Messages Pending to Send: ' + messagesToSubmit.length);
             console.log('Messages Pending of Response ' + pendingResponseSMList.length);
         });
@@ -92,9 +136,3 @@ setTimeout(function(){
             return console.log(err);
     });
 }, 11000);*/
-
-process.on('uncaughtException', function (err) {
-    console.error((new Date).toUTCString() + ' uncaughtException:', err.message)
-    console.error(err.stack)
-    process.exit(1)
-});
